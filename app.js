@@ -156,6 +156,95 @@ function randomRoomCode() {
 }
 function fieldId(caseId,letter,suffix) { return `${caseId}_${letter}_${suffix}`; }
 function currentValue(key) {return state.values.has(key)?state.values.get(key):null;}
+
+// A choice is saved in its original Firestore field.  Previously checked
+// fields (boolean true) remain selected; new values '1'–'4' store rank.
+// No new Firestore paths or security-rule changes are required.
+function isSelected(value) {return value===true || (typeof value==='string' && /^[1-4]$/.test(value));}
+function savedRank(value) {return (typeof value==='string' && /^[1-4]$/.test(value))?Number(value):0;}
+function actionKeys(caseId,letter) {return ['opt0','opt1','opt2','other'].map(s=>fieldId(caseId,letter,s));}
+function orderedSelected(caseId,letter) {
+  return actionKeys(caseId,letter).map((key,index)=>({key,index,rank:savedRank(currentValue(key))}))
+    .filter(({key})=>isSelected(currentValue(key)))
+    .sort((a,b)=>(a.rank||99)-(b.rank||99) || a.index-b.index)
+    .map(({key})=>key);
+}
+function refreshPriorities() {
+  if(state.mode==='setup')return;
+  for(const letter of CASES[state.caseId].order) {
+    const selected=orderedSelected(state.caseId,letter);
+    for(const key of actionKeys(state.caseId,letter)) {
+      const entry=document.querySelector(`[data-action-key="${key}"]`);
+      if(!entry)continue;
+      const check=entry.querySelector('input[type="checkbox"][data-field]');
+      if(check) {check.checked=isSelected(currentValue(key));check.closest('.choice')?.classList.toggle('checked',check.checked);}
+      const control=entry.querySelector('[data-priority-box]');
+      const selector=entry.querySelector('[data-rank-for]');
+      if(!control || !selector)continue;
+      const active=selected.includes(key);
+      control.hidden=!active;
+      const rank=selected.indexOf(key)+1;
+      // Offer only ranks that exist in the current selected action list.
+      selector.innerHTML=selected.map((_,i)=>`<option value="${i+1}">${['1st','2nd','3rd','4th'][i]} priority${i===0?' • do first':''}</option>`).join('');
+      if(active)selector.value=String(rank);
+      entry.classList.toggle('ranked-choice',active);
+    }
+    const counter=document.querySelector(`[data-rank-summary="${letter}"]`);
+    if(counter)counter.textContent=selected.length ? `${selected.length} action${selected.length===1?'':'s'} selected • ranked in order` : 'Choose actions to build your priority order.';
+  }
+}
+async function savePriorityEdits(changes) {
+  if(!changes.length)return;
+  for(const [key,value] of changes)updateOneField(key,value);
+  if(state.mode==='preview') {setSync('Preview • saved on this device');return;}
+  const gen=state.generation;
+  for(const [key,value] of changes)state.pending.set(key,{value,generation:gen});
+  setSync('Saving group priorities…');
+  const {db,firestore}=state.services;
+  try {
+    const batch=firestore.writeBatch(db);
+    for(const [key,value] of changes)batch.set(firestore.doc(db,'hatRooms',state.roomId,'fields',key),{
+      value,updatedBy:state.user.uid,updatedAt:firestore.serverTimestamp()
+    });
+    await batch.commit();
+    if(gen===state.generation) {
+      for(const [key,value] of changes) {
+        const pending=state.pending.get(key);
+        if(pending && pending.value===value)state.pending.delete(key);
+      }
+      if(state.pending.size===0)setSync('Live • priorities shared with your group','live');
+    }
+  } catch(err) {
+    if(gen===state.generation) {
+      setSync('Save failed • check connection','error');
+      toast('Could not save group priorities. Check your connection.');
+      console.error('Priority batch write failed',err);
+    }
+  }
+}
+function changeActionSelection(key,checked) {
+  const found=/^(marcus|elena)_(h|a|t)_(?:opt[0-2]|other)$/.exec(key);
+  if(!found || found[1]!==state.caseId)return;
+  const [,caseId,letter]=found;
+  const order=orderedSelected(caseId,letter).filter(k=>k!==key);
+  if(checked)order.push(key);
+  const desired=new Map(actionKeys(caseId,letter).map(k=>[k,false]));
+  order.forEach((k,i)=>desired.set(k,String(i+1)));
+  const changes=[...desired].filter(([k,v])=>currentValue(k)!==v);
+  savePriorityEdits(changes);
+}
+function moveActionPriority(key,position) {
+  const found=/^(marcus|elena)_(h|a|t)_(?:opt[0-2]|other)$/.exec(key);
+  if(!found || found[1]!==state.caseId || !isSelected(currentValue(key)))return;
+  const [,caseId,letter]=found;
+  const order=orderedSelected(caseId,letter);
+  const target=Math.max(0,Math.min(order.length-1,Number(position)-1));
+  order.splice(order.indexOf(key),1);
+  order.splice(target,0,key);
+  const changes=order.map((k,i)=>[k,String(i+1)]).filter(([k,v])=>currentValue(k)!==v);
+  savePriorityEdits(changes);
+}
+
 function savePreview() {
   try {localStorage.setItem('hat_trick_preview_v1', JSON.stringify(Object.fromEntries(state.values)));} catch (_) {}
 }
@@ -198,13 +287,16 @@ function renderStep(c,letter,index) {
   const st=c.steps[letter],root=fieldId(state.caseId,letter,'');
   const choices=st.options.map((action,i)=>{
     const id=root+'opt'+i;
-    return `<label class="choice"><input type="checkbox" data-field="${id}" aria-label="${esc(action)}"><span>${esc(action)}</span></label>`;
+    return `<div class="action-item" data-action-key="${id}"><label class="choice"><input type="checkbox" data-field="${id}" aria-label="${esc(action)}"><span>${esc(action)}</span></label>${priorityUI(id,action)}</div>`;
   }).join('');
   const otherKey=root+'other';
-  const other=`<label class="choice"><input type="checkbox" data-field="${otherKey}" aria-label="Other action"><span><b>Other</b> — our group has another idea</span></label>
-    <div class="other-entry" data-other-box="${otherKey}" hidden><label class="field-label" for="other-${letter}">Type your group’s idea</label><textarea id="other-${letter}" rows="2" maxlength="800" data-field="${root+'otherText'}" placeholder="Our group suggests…"></textarea></div>`;
+  const other=`<div class="action-item" data-action-key="${otherKey}"><label class="choice"><input type="checkbox" data-field="${otherKey}" aria-label="Other action"><span><b>Other</b> — our group has another idea</span></label>
+    <div class="other-entry" data-other-box="${otherKey}" hidden><label class="field-label" for="other-${letter}">Type your group’s idea</label><textarea id="other-${letter}" rows="2" maxlength="800" data-field="${root+'otherText'}" placeholder="Our group suggests…"></textarea></div>${priorityUI(otherKey,'Other idea')}</div>`;
   const budget=st.budget?`<div class="budget-guide"><strong>50 / 30 / 20 starting point</strong><div class="budget-grid"><div><small>Needs</small><b>${esc(st.budget.needs)}</b></div><div><small>Wants</small><b>${esc(st.budget.wants)}</b></div><div><small>Savings / extra debt</small><b>${esc(st.budget.future)}</b></div></div><p>${esc(st.budget.note)}</p></div>`:'';
-  return `<section id="step-${letter}" class="hat-section ${esc(state.caseId)}" aria-labelledby="heading-${letter}"><div class="hat-section-header"><span class="hat-letter">${LETTERS[letter]}</span><div><h3 id="heading-${letter}">${esc(st.title)}</h3><p>${esc(st.subtitle)}</p></div></div><div class="hat-body"><p class="hat-question">${index+1}. ${esc(st.question)}</p><p class="hat-hint">${esc(st.hint)}</p><div class="choices">${choices}${other}</div>${budget}<div class="hint-row">✓ Select as many choices as your group agrees with.</div></div></section>`;
+  return `<section id="step-${letter}" class="hat-section ${esc(state.caseId)}" aria-labelledby="heading-${letter}"><div class="hat-section-header"><span class="hat-letter">${LETTERS[letter]}</span><div><h3 id="heading-${letter}">${esc(st.title)}</h3><p>${esc(st.subtitle)}</p></div></div><div class="hat-body"><p class="hat-question">${index+1}. ${esc(st.question)}</p><p class="hat-hint">${esc(st.hint)}</p><div class="choices">${choices}${other}</div><div class="rank-summary" data-rank-summary="${letter}" aria-live="polite">Choose actions to build your priority order.</div>${budget}<div class="hint-row">① Check the actions you agree with. ② Use the priority selectors to order them. Everyone in this room sees the same order.</div></div></section>`;
+}
+function priorityUI(key,action) {
+  return `<div class="priority-control" data-priority-box="${key}" hidden><label for="priority-${key}">Group priority</label><select id="priority-${key}" data-rank-for="${key}" aria-label="Priority for ${esc(action)}"></select></div>`;
 }
 function applyValuesToView() {
   document.querySelectorAll('[data-field]').forEach(el=>{
@@ -212,16 +304,17 @@ function applyValuesToView() {
     if(!key)return;
     const val=currentValue(key);
     if(el.type==='checkbox') {
-      el.checked=val===true;
+      el.checked=isSelected(val);
       el.closest('.choice')?.classList.toggle('checked',el.checked);
     } else if(document.activeElement!==el && !state.pending.has(key)) {
       el.value=typeof val==='string'?val:'';
     }
   });
   document.querySelectorAll('[data-other-box]').forEach(box=>{
-    const checked=currentValue(box.dataset.otherBox)===true;
+    const checked=isSelected(currentValue(box.dataset.otherBox));
     box.hidden=!checked;
   });
+  refreshPriorities();
 }
 function updateOneField(key,value,remote=false) {
   state.values.set(key,value);
@@ -229,11 +322,12 @@ function updateOneField(key,value,remote=false) {
   const nodes=document.querySelectorAll('[data-field]');
   for(const el of nodes) {
     if(el.dataset.field!==key)continue;
-    if(el.type==='checkbox') {el.checked=value===true;el.closest('.choice')?.classList.toggle('checked',el.checked);}
+    if(el.type==='checkbox') {el.checked=isSelected(value);el.closest('.choice')?.classList.toggle('checked',el.checked);}
     else if(document.activeElement!==el && !(remote&&state.pending.has(key))) el.value=typeof value==='string'?value:'';
   }
   const otherBox=document.querySelector(`[data-other-box="${key}"]`);
-  if(otherBox)otherBox.hidden!==undefined&&(otherBox.hidden=value!==true);
+  if(otherBox)otherBox.hidden=!isSelected(value);
+  refreshPriorities();
 }
 function onLocalEdit(key,value,isText) {
   if(state.mode!=='live'&&state.mode!=='preview')return;
@@ -363,7 +457,12 @@ function wireEvents() {
   $('copy-link').addEventListener('click',copyRoomLink);
   document.addEventListener('change',event=>{
     const el=event.target;if(!el.matches('#worksheet-screen input[data-field][type="checkbox"]'))return;
-    onLocalEdit(el.dataset.field,el.checked,false);
+    changeActionSelection(el.dataset.field,el.checked);
+  });
+  document.addEventListener('change',event=>{
+    const el=event.target;
+    if(!el.matches('#worksheet-screen select[data-rank-for]'))return;
+    moveActionPriority(el.dataset.rankFor,el.value);
   });
   document.addEventListener('input',event=>{
     const el=event.target;if(!el.matches('#worksheet-screen textarea[data-field]'))return;
