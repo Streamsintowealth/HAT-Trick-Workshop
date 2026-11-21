@@ -1,0 +1,92 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <meta name="theme-color" content="#103e31">
+  <meta name="description" content="Streams Into Wealth Week 3 H.A.T. Trick — mobile-friendly, real-time group worksheet for Marcus and Elena.">
+  <title>H.A.T. Trick Group Lab | Streams Into Wealth</title>
+  <link rel="stylesheet" href="./style.css">
+  <script type="module" src="./app.js"></script>
+</head>
+<body>
+  <div class="app-shell">
+    <header class="mast">
+      <div class="brand-row">
+        <div class="brand-mark" aria-hidden="true">
+          <svg viewBox="0 0 48 46" width="48" height="46"><path d="M5 34h9V21H5zM19 34h9V12h-9zM33 34h9V4h-9z" fill="#d5ae4c"/><path d="M4 39Q24 46 44 25" fill="none" stroke="#e9c46b" stroke-width="3.5" stroke-linecap="round"/></svg>
+        </div>
+        <div class="brand-title"><strong>Streams Into Wealth</strong><span>WEEK 3 • LIVE BREAKOUT LAB</span></div>
+      </div>
+      <h1>The <em>H.A.T.</em> Trick</h1>
+      <p>Choose a story. Make your group’s decisions. Explain why.</p>
+    </header>
+
+    <main class="content">
+      <section id="setup-screen" aria-labelledby="setup-title">
+        <div class="section-eyebrow">YOUR GROUP CHALLENGE</div>
+        <h2 id="setup-title" class="welcome-title">One story. One shared worksheet.</h2>
+        <p class="intro-copy">Marcus needs a spending plan. Elena needs a fraud-response plan. Your group works together, with answers appearing on everyone’s phone.</p>
+        <div id="connection-notice" role="status" class="notice notice-neutral">Checking live collaboration…</div>
+
+        <section class="panel" aria-label="Choose story and create group">
+          <div class="panel-head"><span class="step-number">1</span><div><h3>Choose a story</h3><p>You can switch stories later without losing answers.</p></div></div>
+          <div class="scenario-switch" role="group" aria-label="Choose a story">
+            <button type="button" class="case-btn active" data-pick-case="marcus" aria-pressed="true"><span class="case-symbol">$</span><span><b>Marcus</b><small>Money & impulse spending</small></span></button>
+            <button type="button" class="case-btn" data-pick-case="elena" aria-pressed="false"><span class="case-symbol">!</span><span><b>Elena</b><small>Fraud & account protection</small></span></button>
+          </div>
+          <div class="setup-button-row">
+            <button id="create-room" class="btn primary" type="button">Create my group room</button>
+            <button id="preview-room" class="btn soft" type="button">Preview on this device</button>
+          </div>
+          <p class="micro">One person creates a room, then shares its link with their breakout group. Preview is for practice only and does not share changes.</p>
+        </section>
+
+        <section class="panel" aria-label="Join existing group">
+          <div class="panel-head"><span class="step-number gold">2</span><div><h3>Join your group</h3><p>Open the shared link or enter the code.</p></div></div>
+          <label for="join-code" class="field-label">Room code</label>
+          <div class="join-row"><input id="join-code" type="text" maxlength="12" placeholder="e.g. K4M7DH9PX2RJ" autocomplete="off" autocapitalize="characters" spellcheck="false"><button id="join-room" type="button" class="btn outline">Join room</button></div>
+        </section>
+        <p class="privacy">Use fictional information only. Never enter a real account number, password, or other personal financial information.</p>
+      </section>
+
+      <section id="worksheet-screen" hidden aria-labelledby="challenge-title">
+        <div class="workspace-bar">
+          <button type="button" id="back-home" class="back-link">← All rooms</button>
+          <span id="sync-status" class="sync-status" role="status"><i class="dot"></i> Connecting…</span>
+        </div>
+        <div id="room-controls" class="room-controls" hidden><div>ROOM CODE <strong id="room-code">—</strong></div><button id="copy-link" class="btn outline compact" type="button">Copy group link</button></div>
+
+        <div class="story-tabs-wrap">
+          <div class="mini-label">SWITCH SCENARIOS</div>
+          <div class="story-tabs" role="group" aria-label="Switch between Marcus and Elena"><button class="tab active" type="button" data-pick-case="marcus" aria-pressed="true">Marcus <span>Money habits</span></button><button class="tab" type="button" data-pick-case="elena" aria-pressed="false">Elena <span>Fraud protection</span></button></div>
+        </div>
+
+        <div class="challenge-head"><div class="section-eyebrow" id="challenge-kicker">ROOM A • MARCUS</div><h2 id="challenge-title">The Messy Payday Rebuild</h2><p id="challenge-subtitle">Prevent rent-money mistakes and hidden leaks.</p></div>
+
+        <div class="workspace-grid">
+          <section id="story-card" class="story-panel" aria-labelledby="story-title">
+            <div class="story-top"><div><div class="mini-label">READ THE STORY</div><h3 id="story-title">Marcus’s situation</h3></div><span id="story-count" class="story-label">ROOM A</span></div>
+            <p id="story-summary" class="story-summary"></p>
+            <div id="story-facts" class="facts"></div>
+            <div id="story-problem" class="problem"></div>
+            <div id="story-mission" class="mission"></div>
+          </section>
+
+          <div class="answer-stack">
+            <div class="activity-intro"><h3>Your group’s H.A.T. choices</h3><p>Choose <b>one or more</b> actions under each letter. Select <b>Other</b> to suggest your own. The group writes its reasoning at the end.</p><div class="activity-details"><span>7 minutes to decide</span><span>2 minutes to share</span></div></div>
+            <nav id="step-links" class="step-links" aria-label="Jump to H.A.T. sections"></nav>
+            <div id="hat-sections"></div>
+            <section id="final-card" class="final-card"><div class="section-eyebrow">THE MOST IMPORTANT PART</div><h3 id="final-title">Explain your group’s reasoning</h3><p id="final-prompt"></p><label class="field-label" for="final-reason">We chose this because…</label><textarea id="final-reason" data-field="" rows="5" maxlength="1200" placeholder="Our group thinks the most important change is… because…"></textarea><p class="micro" id="final-help">One shared answer. Everyone in this room can add to it.</p></section>
+            <div class="finish-panel"><span aria-hidden="true" class="finish-icon">✓</span><div><b>Ready to share?</b><p id="debrief-question"></p></div></div>
+          </div>
+        </div>
+        <div class="privacy bottom-privacy">Group links are invitations, not private accounts. Anyone with a valid room link can read or edit the fictional group answers.</div>
+      </section>
+    </main>
+
+    <footer class="footer"><b>STREAMS INTO WEALTH</b><span>Secure yourself for tomorrow.</span></footer>
+  </div>
+  <div id="toast" class="toast" role="status" aria-live="polite"></div>
+</body>
+</html>
